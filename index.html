@@ -130,6 +130,16 @@
 
 </style><style>
 /* The camera moves only the architecture; controls and type keep their Pad size. */
+.level-clear{position:absolute;z-index:7;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:24px 24px 95px;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,transparent 40%,#ffeac011 100%)}
+.clear-card{position:relative;width:min(490px,100%);padding:22px 30px 25px;text-align:center;border:1px solid #fff1bcbb;border-radius:52px 52px 18px 18px;background:linear-gradient(145deg,#286d65eb,#235b57e0);box-shadow:0 0 54px #ffecad28,0 15px 55px #164f5838;color:#fff2cc;backdrop-filter:blur(8px)}
+.clear-seal{display:block;margin:0 auto 10px;width:50px;font:46px/1 Georgia;color:#ffe6a0;text-shadow:0 0 20px #ffe5a899}
+.clear-kicker{display:block;font-size:15px;line-height:1.5;letter-spacing:3px;color:#e9d9ac}
+.clear-card h2{font:400 34px/1.45 'Songti SC','SimSun',serif;letter-spacing:5px;margin:10px 0 8px;text-shadow:0 0 24px #ffe4a633}
+.clear-card p{font-size:18px;line-height:1.7;letter-spacing:1px;margin:0;color:#e7ebd1}
+.level-clear[data-finale="true"] .clear-card{border-color:#ffed9e;box-shadow:0 0 75px #ffe39b44,0 15px 55px #164f5838}
+.game[data-clearing="true"] footer{opacity:0;pointer-events:none}
+@media(max-height:600px){.level-clear{padding-bottom:58px}.clear-card{width:min(440px,100%);padding:14px 22px 18px}.clear-seal{font-size:34px;margin-bottom:5px}.clear-kicker{font-size:13px}.clear-card h2{font-size:29px;margin:5px 0}.clear-card p{font-size:16px}}
+@media(max-width:600px){.level-clear{padding-left:20px;padding-right:20px}.clear-card{padding-left:20px;padding-right:20px}.clear-card h2{font-size:29px;letter-spacing:3px}.clear-card p{font-size:16px}.clear-kicker{font-size:13px;letter-spacing:2px}}
 .camera-controls{position:absolute;z-index:4;right:32px;top:96px;text-align:right;color:#f6f2d8;user-select:none;-webkit-user-select:none}
 .camera-controls>div{display:inline-flex;gap:5px;padding:5px;border:1px solid #e3f1d475;border-radius:30px;background:#286e6a66;backdrop-filter:blur(8px)}
 .camera-controls button{min-width:48px;height:46px;border-radius:24px;font-size:25px;line-height:1;touch-action:manipulation}
@@ -159,6 +169,9 @@
     <p id="camera-tip">双指缩放 · 放大后拖动空白处</p>
   </div>
   <div id="route-status" class="route-status" role="status" aria-live="polite"></div>
+  <section id="level-clear" class="level-clear" role="status" aria-live="polite" aria-atomic="true" hidden>
+    <div class="clear-card"><span class="clear-seal" aria-hidden="true">◇</span><span id="clear-kicker" class="clear-kicker"></span><h2 id="clear-title"></h2><p id="clear-copy"></p></div>
+  </section>
   <div class="chapter-progress" aria-label="第一大段三章进度"><span id="progress-one" class="current">一 · 水宫</span><i></i><span id="progress-two">二 · 隔岸</span><i></i><span id="progress-three">三 · 桥下</span></div>
   <div class="orientation-note">横过来，让水宫在两岸之间展开。</div>
   <div id="toast" class="toast" role="status"></div><p id="live" class="sr-only" aria-live="polite"></p>
@@ -475,6 +488,15 @@
   const levelTitles=['','没有落点的阶梯','联络之印','看得见，却走不到','让桥站稳','影子里的台阶','沿着边缘过去'];
   const chapterTitles=['','水宫来信','隔岸的灯','桥下有路'];
   const endKinds={1:'letter',2:'ending',3:'crossing',4:'together',5:'shadow',6:'tide'};
+  const clearProfiles={
+    1:{title:'来信已寻得',copy:'第一段路，记住了你的脚步。',duration:3000},
+    2:{title:'水宫已苏醒',copy:'两道印记相连，隔岸的灯亮了。',duration:3800},
+    3:{title:'终于靠近了',copy:'绕过塔身，另一盏灯就在前方。',duration:3000},
+    4:{title:'两盏灯会合',copy:'桥已站稳，这一次一起出发。',duration:3800},
+    5:{title:'旧路已寻得',copy:'影子散去，桥下的路显现了。',duration:3000},
+    6:{title:'潮水归来',copy:'第一股潮水，流进了内城。',duration:4600}
+  };
+  const completionVoices=new Set();
   const palette={cream:['#f7e7c2','#d7bd8c','#e8cf9e'],sand:['#eddaad','#c7aa77','#dcc08c'],pink:['#f4b0c0','#cd809f','#e69ab1'],stone:['#dfc99c','#baa071','#cbb17f'],dark:['#d3bd94','#a88f68','#c1a377']};
   let state,history=[],now=0,previous=0,w=0,h=0,scale=1,ox=0,oy=0,drag=null,toastUntil=0,uiKey='',audio=null,soundOn=false,lastFootstep=0;
   let fit={scale:1,ox:0,oy:0},view={zoom:1,x:0,y:0},pendingTap=null,pinch=null,tapFeedback=null,roadGlowUntil=0,connectionKey='';
@@ -514,6 +536,7 @@
     applyCamera();
   }
   function startLevel(n){
+    stopCompletionSound();$('level-clear').hidden=true;$('game').dataset.clearing='false';
     level=n;chapterComplete=false;extra=n>=3?window.JourneyLevels.create(n,journeyTools):null;fixed=extra?extra.fixed:n===1?entranceFixed:palaceFixed;names=extra?extra.names:Object.fromEntries(Object.entries(allNames).filter(([id])=>n===1?['start','landing','ride','letter'].includes(id):id!=='letter'));
     window.PalaceGo.configure(extra?.puzzle||'seal');
     state={at:'start',stairs:extra?extra.initial.stairs:n===1?PI:0,rotor:extra?extra.initial.rotor:PI/2,targets:{stairs:null,rotor:null},selected:extra?extra.selected:'stairs',switchLit:false,switchAt:0,puzzleSeen:false,walk:null,player:fixed.start.slice(),normal:[0,0,1],done:false,doneAt:0,endDismissed:false,hint:0,visited:new Set(['start'])};
@@ -535,6 +558,7 @@
     tide:{kicker:'第一大段完 · 相连',title:'第一股潮水',copy:'“路通了。\n可这里的灯，\n还留不住光。”',foot:'旧水道把第一股潮水送入内城。\n下一段 · 安住',next:'留在潮门'}
   };
   function showStory(kind){
+    $('level-clear').hidden=true;$('game').dataset.clearing='false';
     $('controls').hidden=true;$('assist').setAttribute('aria-expanded','false');
     story=kind;let s=stories[kind];if(kind==='recall'&&level>=3)s=level<=4?{kicker:'旅人手记 · 隔岸的灯',title:'靠近另一盏灯',copy:'先找到塔背面的路，\n再让两岸的桥站稳。',foot:'渡灯人就在对岸，等你一起走向内城。',next:'继续探索'}:{kicker:'旅人手记 · 桥下有路',title:'沿灯光找路',copy:'正桥虽然断了，\n桥下却藏着旧水道。',foot:'沿边缘通过潮门，再回到上层接回同伴。',next:'继续探索'};
     $('story-kicker').textContent=s.kicker;$('story-title').textContent=s.title;$('story-copy').textContent=s.copy;$('story-footnote').textContent=s.foot;$('story-next').textContent=s.next;
@@ -553,6 +577,7 @@
   function undo(){
     if(story||transition||atlasOpen||window.PalaceGo.isOpen)return;
     const old=history.pop();if(!old){toast('还没有可以退回的步骤。');return;}
+    stopCompletionSound();$('level-clear').hidden=true;$('game').dataset.clearing='false';
     Object.assign(state,old,{targets:{stairs:null,rotor:null},walk:null,done:false,doneAt:0,endDismissed:false,normal:[0,0,1],visited:new Set(old.visited),hint:0});
     state.switchLit=state.switchLit||window.PalaceGo.state.solved;
     state.player=world(state.at).slice();state.switchAt=state.switchLit?now-2000:0;drag=null;uiKey='';sync();
@@ -563,6 +588,43 @@
     o.type='sine';o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(v,t+.015);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+d+.03);
   }
   function chime(){[392,523.25,659.25,784].forEach((f,i)=>tone(f,1.1,.045,i*.13));}
+  function stopCompletionSound(){
+    for(const voice of [...completionVoices]){try{voice.osc.stop();voice.osc.disconnect();voice.gain.disconnect();}catch{}completionVoices.delete(voice);}
+  }
+  function completionBell(f,delay,duration,volume){
+    if(!audio||!soundOn||audio.state==='suspended')return;
+    for(const [multiple,strength]of [[1,1],[2,.16]]){
+      const at=audio.currentTime+delay,osc=audio.createOscillator(),gain=audio.createGain(),voice={osc,gain};
+      osc.type='sine';osc.frequency.setValueAtTime(f*multiple,at);
+      gain.gain.setValueAtTime(.0001,at);gain.gain.exponentialRampToValueAtTime(volume*strength,at+.012);gain.gain.exponentialRampToValueAtTime(.0001,at+duration);
+      osc.connect(gain);gain.connect(audio.destination);completionVoices.add(voice);
+      osc.onended=()=>{completionVoices.delete(voice);osc.disconnect();gain.disconnect();};osc.start(at);osc.stop(at+duration+.04);
+    }
+  }
+  function completionMusic(){
+    stopCompletionSound();
+    // A low arrival note, then four spacious bell notes and a soft answer.
+    // Chapter ends add a warm chord; the last tide has a longer final answer.
+    completionBell(261.63,0,1.5,.026);
+    [[523.25,.08,.7,.036],[659.25,.31,.85,.036],[783.99,.56,.95,.038],[1046.5,.92,1.55,.044]].forEach(note=>completionBell(...note));
+    completionBell(1046.5,1.38,1.25,.012);
+    if(level%2===0)[261.63,329.63,392].forEach((f,i)=>completionBell(f,.94+i*.045,1.9,.018));
+    if(level===6){completionBell(1318.51,1.58,1.25,.022);completionBell(1046.5,1.88,1.8,.026);}
+  }
+  function finishLevel(){
+    if(state.done)return;state.done=true;state.doneAt=now;
+    const profile=clearProfiles[level],chapter=Math.ceil(level/2);
+    $('clear-kicker').textContent='第 '+String(level).padStart(2,'0')+' 关完成'+(level===6?' · 第一大段完成':level%2===0?' · 第'+['一','二','三'][chapter-1]+'章完成':'');
+    $('clear-title').textContent=profile.title;$('clear-copy').textContent=profile.copy;$('level-clear').dataset.finale=String(level===6);$('level-clear').hidden=false;
+    $('controls').hidden=true;$('assist').setAttribute('aria-expanded','false');$('toast').classList.remove('show');toastUntil=0;
+    $('live').textContent='第'+level+'关完成。'+profile.title+'。';completionMusic();
+  }
+  function updateCompletion(){
+    const profile=clearProfiles[level],age=now-state.doneAt,active=state.done&&!story&&!transition&&!atlasOpen&&age<profile.duration;
+    $('level-clear').hidden=!active;$('game').dataset.clearing=String(active);if(!active)return;
+    const entrance=ease(clamp(age/480)),exit=1-ease(clamp((age-profile.duration+500)/500));
+    $('level-clear').style.opacity=String(entrance*exit);$('level-clear').style.transform=`translateY(${(1-entrance)*12}px)`;
+  }
   function busy(){return !!state.walk||state.done||window.PalaceGo.isOpen||!!story||!!transition||atlasOpen;}
   function inspectGo(){if(!hasPuzzle())return;if(extra&&!extra.puzzleReady(state)){toast('先让两岸的桥廊都对齐，金纹才会呼应。');return;}state.puzzleSeen=true;window.PalaceGo.open(()=>{state.switchLit=true;state.switchAt=now;chime();uiKey='';sync();});uiKey='';sync();}
   function moving(){return !!drag||state.targets.stairs!==null||state.targets.rotor!==null;}
@@ -637,6 +699,8 @@
     const can=reachable(),key=[level,story,!!transition,atlasOpen,state.at,state.selected,state.switchLit,!!state.walk,moving(),state.done,history.length,window.PalaceGo.isOpen,can.join()].join('|');if(key===uiKey)return;uiKey=key;
     $('inspect-go').hidden=!hasPuzzle()||state.at!=='switch'||state.switchLit||busy();
     $('caption').textContent=caption();$('undo').disabled=!history.length||!!story||!!transition||atlasOpen||window.PalaceGo.isOpen;$('mechanism-name').textContent=extra?extra.mechanisms[state.selected]:state.selected==='stairs'?'翻转楼梯':level===1?'旋转桥廊':'旋转建筑';
+    $('hint').disabled=state.done;
+    $('assist').disabled=state.done;
     $('choose-rotor').hidden=!rotorAvailable();$('choose-stairs').hidden=!available('stairs');
     for(const id of ['stairs','rotor'])$('choose-'+id).setAttribute('aria-pressed',String(state.selected===id));
     for(const id of ['left','right','choose-stairs','choose-rotor'])$(id).disabled=busy();
@@ -668,12 +732,13 @@
         if(extra){const next=extra.arrival(state.at,state);if(next)state.selected=next;}
         if(level===1&&state.at==='landing')toast('桥廊的把手露出来了。先接上道路，再走到桥廊上。');
         if(state.at==='switch'&&!state.switchLit&&hasPuzzle()&&(!extra||extra.puzzleReady(state)))inspectGo();
-        if(state.at==='exit'||state.at==='letter'){state.done=true;state.doneAt=now;chime();if(state.at==='exit'){$('controls').hidden=true;$('assist').setAttribute('aria-expanded','false');}}
-        $('live').textContent='到达'+names[state.at];
+        if(state.at==='exit'||state.at==='letter')finishLevel();
+        else $('live').textContent='到达'+names[state.at];
       }
     }else{state.player=world(state.at).slice();state.normal=[0,0,1];}
     if(extra?.puzzle&&state.at==='switch'&&!state.switchLit&&!state.puzzleSeen&&!state.walk&&!moving()&&!story&&!transition&&!atlasOpen&&!window.PalaceGo.isOpen&&extra.puzzleReady(state))inspectGo();
-    if(state.done&&!state.endDismissed&&!story&&now-state.doneAt>({1:850,2:3600,3:1100,4:3000,5:1500,6:3600}[level])){state.endDismissed=true;chapterComplete=level%2===0;showStory(endKinds[level]);}
+    updateCompletion();
+    if(state.done&&!state.endDismissed&&!story&&now-state.doneAt>=clearProfiles[level].duration){state.endDismissed=true;chapterComplete=level%2===0;showStory(endKinds[level]);}
     sync();
   }
 
@@ -909,7 +974,27 @@
     // roof terrace and its pressure plate in front of its lower shaft.
     water();if(extra)extra.draw(state,now);else if(level===1)entrance();else{farShore();foundation();rearTower();exitTower();palace();rotor();stairs();}routeTrace();markers();character();
     ctx.restore();
+    renderCompletion();
     if(tapFeedback&&now-tapFeedback.at<650){const t=(now-tapFeedback.at)/650;ctx.save();ctx.globalAlpha=1-t;ellipse(tapFeedback.x,tapFeedback.y,14+t*22,14+t*22,null,tapFeedback.color,2);ctx.restore();}
+  }
+  function renderCompletion(){
+    if(!state.done||story||atlasOpen||transition)return;
+    const age=(now-state.doneAt)/1000,duration=clearProfiles[level].duration/1000;if(age>=duration)return;
+    const q=screen(state.player),x=q[0],y=q[1],intensity=ease(clamp(age/.3))*(1-ease(clamp((age-duration+.65)/.65)));
+    ctx.save();
+    const glow=ctx.createRadialGradient(x,y-24,3,x,y-24,145);glow.addColorStop(0,'#fff3b575');glow.addColorStop(.48,'#ffe8a02b');glow.addColorStop(1,'#ffe8a000');
+    ctx.globalAlpha=intensity;ellipse(x,y-24,145,145,glow);
+    for(const delay of [0,.32,.68]){const t=clamp((age-delay)/1.75);if(t<=0||t>=1)continue;ctx.globalAlpha=(1-t)*.8;ellipse(x,y+2,22+out(t)*145,11+out(t)*64,null,'#fff1b8',2-t);}
+    const beam=ctx.createLinearGradient(x,y-155,x,y+8);beam.addColorStop(0,'#fff6cb00');beam.addColorStop(.65,'#fff6cb55');beam.addColorStop(1,'#fff6cbbb');
+    ctx.globalAlpha=intensity*Math.max(0,1-age/(duration*.9));polygon([[x-35,y+6],[x-14,y-155],[x+14,y-155],[x+35,y+6]],beam);
+    const count=level%2===0?34:24;
+    for(let i=0;i<count;i++){
+      const t=age-(i%7)*.07;if(t<0)continue;const life=clamp(t/(2.2+(i%4)*.22)),angle=i*2.39996+level*.65;
+      if(life>=1)continue;const px=x+Math.cos(angle)*(13+life*(65+(i%5)*18))+Math.sin(t*2+i)*5,py=y-8-life*(80+(i%6)*24)+Math.sin(angle)*18;
+      const radius=(i%4===0?3:1.8)*(1-life*.55);ctx.globalAlpha=Math.sin(PI*life)*intensity*.9;
+      ellipse(px,py,radius,radius,i%3===0?'#fff9df':'#ffe3a1');if(i%5===0){line([[px-radius*2.3,py],[px+radius*2.3,py]],'#fff3c5',1);line([[px,py-radius*2.3],[px,py+radius*2.3]],'#fff3c5',1);}
+    }
+    ctx.restore();
   }
 
   function hitMechanism(q,coarse=false){
@@ -1057,7 +1142,7 @@
     else hints=['这座水宫，已经记住了你的脚步。'];
     toast(hints[Math.min(state.hint++,hints.length-1)]);
   };
-  $('sound').onclick=async()=>{if(!audio){const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio){toast('当前浏览器暂不支持声音，仍可完整游玩。');return;}audio=new Audio();}if(audio.state==='suspended')await audio.resume();soundOn=!soundOn;$('sound').classList.toggle('sound-on',soundOn);$('sound').setAttribute('aria-label',soundOn?'关闭声音':'开启声音');$('sound').title=soundOn?'关闭声音':'开启声音';if(soundOn)chime();};
+  $('sound').onclick=async()=>{if(!audio){const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio){toast('当前浏览器暂不支持声音，仍可完整游玩。');return;}audio=new Audio();}if(audio.state==='suspended')await audio.resume();soundOn=!soundOn;$('sound').classList.toggle('sound-on',soundOn);$('sound').setAttribute('aria-label',soundOn?'关闭声音':'开启声音');$('sound').title=soundOn?'关闭声音':'开启声音';if(soundOn)chime();else stopCompletionSound();};
   $('story').addEventListener('keydown',e=>{
     if(e.key==='Tab'){const available=[$('story-next'),$('story-linger'),$('story-replay'),$('story-palace')].filter(x=>!x.hidden),first=available[0],last=available.at(-1);if(e.shiftKey&&(document.activeElement===first||document.activeElement===$('story-title'))){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
     if(e.key==='Escape'&&story==='recall'){e.preventDefault();hideStory();}
@@ -1068,7 +1153,7 @@
     if(e.key.toLowerCase()==='z')undo();if(e.key==='Escape'){$('controls').hidden=true;$('assist').setAttribute('aria-expanded','false');}
   });
   function openAtlas(){
-    if(atlasOpen)return;cancelInputs();atlasOpen=true;atlasFocus=document.activeElement;$('atlas').hidden=false;$('go-panel').inert=true;$('story').inert=true;
+    if(atlasOpen)return;cancelInputs();stopCompletionSound();$('level-clear').hidden=true;atlasOpen=true;atlasFocus=document.activeElement;$('atlas').hidden=false;$('go-panel').inert=true;$('story').inert=true;
     for(let i=1;i<=6;i++)$('choose-level-'+i).setAttribute('aria-current',String(i===level));$('atlas-title').focus();uiKey='';sync();
   }
   function closeAtlas(){atlasOpen=false;$('atlas').hidden=true;$('go-panel').inert=false;$('story').inert=false;atlasFocus?.focus();uiKey='';sync();}
@@ -1081,7 +1166,7 @@
   });
   const journeyTools={ctx,p,block,square,terrace,arch,dome,line,ellipse,worldLine,halo,palette,clamp,lerp,mechanismHint};
   addEventListener('resize',resize);resize();resetChapter();previous=performance.now();
-  document.addEventListener('visibilitychange',()=>{previous=performance.now();if(document.hidden)cancelInputs();});
+  document.addEventListener('visibilitychange',()=>{previous=performance.now();if(document.hidden){cancelInputs();stopCompletionSound();}});
   function frame(t){const elapsed=Math.max(0,t-previous);previous=t;if(!document.hidden&&!atlasOpen){now+=elapsed;update(Math.min(60,elapsed));render();}requestAnimationFrame(frame);}requestAnimationFrame(frame);
   window.waterPalace={get state(){return{level,story,atlasOpen,transition:!!transition,letterRead,chapterComplete,at:state.at,stairs:state.stairs,rotor:state.rotor,switchLit:state.switchLit,walking:!!state.walk,moving:moving(),player:state.player.slice(),normal:state.normal.slice(),done:state.done,reachable:reachable(),history:history.length,camera:{zoom:view.zoom,x:view.x,y:view.y,scale}};},project:p,seam:()=>({moving:rot(crest,0),fixed:seam.slice()}),targets:()=>({nodes:Object.fromEntries(Object.keys(names).map(id=>[id,screen(world(id))])),handles:Object.fromEntries(['stairs','rotor'].filter(available).map(id=>[id,screen(handle(id))]))}),markers:()=>waypointLayout().map(m=>({...m,point:m.point.slice(),anchor:m.anchor.slice(),box:{...m.box}}))};
 })();
