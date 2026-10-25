@@ -130,6 +130,8 @@
 
 </style><style>
 /* The camera moves only the architecture; controls and type keep their Pad size. */
+.title #save-status{font:14px/1.5 system-ui,'Microsoft YaHei',sans-serif;letter-spacing:.5px;margin:4px 0 0;color:#e7eed0c9;pointer-events:none}
+@media(max-height:550px){.title #save-status{font-size:12px;margin-top:1px}}
 .level-clear{position:absolute;z-index:7;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:24px 24px 95px;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,transparent 40%,#ffeac011 100%)}
 .clear-card{position:relative;width:min(490px,100%);padding:22px 30px 25px;text-align:center;border:1px solid #fff1bcbb;border-radius:52px 52px 18px 18px;background:linear-gradient(145deg,#286d65eb,#235b57e0);box-shadow:0 0 54px #ffecad28,0 15px 55px #164f5838;color:#fff2cc;backdrop-filter:blur(8px)}
 .clear-seal{display:block;margin:0 auto 10px;width:50px;font:46px/1 Georgia;color:#ffe6a0;text-shadow:0 0 20px #ffe5a899}
@@ -168,7 +170,7 @@
 </style></head>
 <body><main id="game" class="game">
   <button id="atlas-trigger" class="atlas-trigger" type="button">归潮之城</button>
-  <header><div class="title"><h1 id="chapter-title">水宫来信</h1><p id="level-label">01 / 没有落点的阶梯</p></div><nav aria-label="游戏选项">
+  <header><div class="title"><h1 id="chapter-title">水宫来信</h1><p id="level-label">01 / 没有落点的阶梯</p><p id="save-status" class="save-status" role="status" aria-live="polite">进度自动保存</p></div><nav aria-label="游戏选项">
     <button id="letter-book" class="letter-book" aria-label="重读来信" title="重读来信" hidden>信</button>
     <button id="sound" aria-label="开启声音" title="开启声音"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path id="muted-icon" d="m16 10 4 4m0-4-4 4"/><path id="sound-icon" d="M15 8c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/></svg></button>
     <button id="undo" aria-label="退一步" title="退一步"><svg viewBox="0 0 24 24"><path d="m8 5-5 5 5 5M3 10h10a6 6 0 0 1 0 12" transform="translate(0 -2)"/></svg></button>
@@ -267,6 +269,8 @@
   const panel=$('go-panel'),grid=$('go-board'),cells=[];
   let board,ko,records,trail,level,opened=false,solved=false,skipped=false,failed=false,committed=false,pending=0,generation=0,onComplete=()=>{},returnFocus=null,accessOpen=false,taps=0,tapStarted=0;
   let search=E.solver(targets);
+  let changed=()=>{};
+  const positionKey=()=>initial.join('')+':'+targets.join(',')+':'+problem.blackMoves;
   const remainingMoves=()=>Math.max(0,problem.blackMoves-records.filter(r=>r.color===1).length);
   for(let i=0;i<25;i++){
     const cell=document.createElement('button');cell.className='intersection';cell.type='button';cell.dataset.point=names(i);
@@ -292,6 +296,7 @@
     const moves=records.map((r,n)=>(n+1)+(r.color===1?'黑':'白')+names(r.i)+(r.captured.length?' 提'+r.captured.length+'子':''));
     $('go-moves').textContent=moves.length?(moves.length>4?'最近：':'')+moves.slice(-4).join(' · '):'';
     $('go-moves').title=moves.join(' · ');
+    changed();
   }
   function hideAccess(){accessOpen=false;taps=0;$('go-access').hidden=true;$('go-content').inert=false;}
   function reset(){clearTimeout(pending);pending=0;generation++;board=initial.slice();ko=null;records=[];trail=[];level=0;solved=false;skipped=false;failed=false;committed=false;$('go-preview-code').value='';$('go-preview-message').textContent='';hideAccess();message(problem.opener);render();}
@@ -359,6 +364,29 @@
   window.PalaceGo={
     configure(id){opened=false;panel.hidden=true;problem=window.GoProblems[id];if(!problem)throw new Error('Unknown Go problem '+id);initial=problem.board;targets=problem.targets;search=E.solver(targets);$('go-title-trigger').textContent=problem.title;$('go-tag').textContent=problem.tag;$('go-goal').textContent=problem.goal;$('go-description').textContent=problem.description;reset();},
     open(callback){onComplete=callback;returnFocus=document.activeElement;opened=true;taps=0;panel.hidden=false;$('scene').setAttribute('aria-hidden','true');render();$('go-title').focus();},
+    onChange(callback){changed=callback;},
+    serialize(){return{id:problem.id,position:positionKey(),moves:records.map(r=>({i:r.i,color:r.color})),pending:!!pending,solved,skipped,failed,committed,opened};},
+    restore(data){
+      // Rebuild from legal moves; never trust a stored board or captured-stone list.
+      if(!data||data.id!==problem.id||data.position!==positionKey()||!Array.isArray(data.moves)||data.moves.length>problem.blackMoves*2||!['pending','solved','skipped','failed','committed','opened'].every(k=>typeof data[k]==='boolean'))return false;
+      let b=initial.slice(),previousKo=null;const played=[],undo=[];
+      for(const [n,move]of data.moves.entries()){
+        if(!move||!Number.isInteger(move.i)||move.color!==(n%2?2:1)||E.safe(b,targets,previousKo)||targets.some(t=>b[t]!==1))return false;
+        const next=E.play(b,move.i,move.color,previousKo);if(!next)return false;
+        if(move.color===1)undo.push({board:b.slice(),ko:previousKo,records:played.slice()});
+        played.push({i:move.i,color:move.color,captured:next.captured});b=next.board;previousKo=next.ko;
+      }
+      const connected=E.safe(b,targets,previousKo),awaitingWhite=data.moves.length%2===1&&!connected;
+      if(data.solved!==(connected||data.skipped)||data.committed&&!data.solved||(data.pending!==awaitingWhite&&!data.skipped)||data.pending&&data.failed)return false;
+      clearTimeout(pending);pending=0;generation++;board=b;ko=previousKo;records=played;trail=undo;level=0;solved=data.solved;skipped=data.skipped;committed=data.committed;failed=false;hideAccess();
+      if(data.pending)reply();
+      else if(!solved){
+        failed=targets.some(t=>board[t]!==1)||(!remainingMoves()||!search.win(board,1,remainingMoves()*2-1,ko));
+        message(failed?'已接回上次的棋谱。这次联络尚未完成，可退一回合再试。':records.length?'已接回上次的棋谱，轮到黑棋继续。':problem.opener);render();
+      }else if(skipped){message('试玩通路已经开启。');render();}
+      else finish();
+      return true;
+    },
     reset(){opened=false;panel.hidden=true;reset();},
     get isOpen(){return opened;},
     get state(){return{problem:problem.id,ko,opened,solved,skipped,failed,pending:!!pending,remainingMoves:remainingMoves(),board:board.slice(),moves:records.map(r=>({...r})),targets:targets.slice()};}
@@ -521,6 +549,8 @@
   let fit={scale:1,ox:0,oy:0},view={zoom:1,x:0,y:0},pendingTap=null,pinch=null,tapFeedback=null,roadGlowUntil=0,connectionKey='';
   const pointers=new Map();
   const zoomMemoryKey='guichao.zoom-learned.v1';
+  const progressMemoryKey='guichao.progress.v1';
+  let progressReady=false,progressLocked=0,lastProgressText='';
   let zoomLearned=false;
   try{zoomLearned=window.localStorage.getItem(zoomMemoryKey)==='1';}catch{}
   function recordZoomUse(){
@@ -563,7 +593,48 @@
     if(view.zoom===1){view.x=0;view.y=0;}else{applyCamera();view.x+=anchor[0]-(q[0]*scale+ox);view.y+=anchor[1]-(q[1]*scale+oy);}
     applyCamera();recordZoomUse();
   }
+  function progressStatus(text){if($('save-status').textContent!==text)$('save-status').textContent=text;}
+  function stablePose(s){return{at:s.at,stairs:Math.atan2(Math.sin(s.stairs),Math.cos(s.stairs)),rotor:Math.atan2(Math.sin(s.rotor),Math.cos(s.rotor)),selected:s.selected,switchLit:s.switchLit,puzzleSeen:s.puzzleSeen,visited:[...s.visited]};}
+  function saveProgress(){
+    if(!progressReady||progressLocked||!state)return;
+    if(!transition&&(state.walk||moving())){progressStatus(state.walk?'到达后自动保存':'机关停稳后保存');return;}
+    const data=transition?{version:1,level:transition.to,letterRead:true,checkpoint:null}:{version:1,level,letterRead,checkpoint:{...stablePose(state),done:state.done,story:state.done&&!state.endDismissed?endKinds[level]:story,history:history.map(stablePose),puzzle:hasPuzzle()?window.PalaceGo.serialize():null}};
+    const text=JSON.stringify(data);
+    if(text===lastProgressText)return;
+    try{window.localStorage.setItem(progressMemoryKey,text);lastProgressText=text;progressStatus('进度已保存 · 本机');}
+    catch{progressStatus('暂不能保存 · 可继续游玩');}
+  }
+  function readPose(data){
+    if(!data||!Object.hasOwn(names,data.at)||!['stairs','rotor'].includes(data.selected)||typeof data.switchLit!=='boolean'||typeof data.puzzleSeen!=='boolean'||!Array.isArray(data.visited)||data.visited.length>Object.keys(names).length||!data.visited.includes('start')||!data.visited.includes(data.at)||!data.visited.every(id=>Object.hasOwn(names,id)))return null;
+    for(const id of ['stairs','rotor'])if(!Number.isFinite(data[id])||Math.abs(data[id])>TAU+.001||Math.abs(data[id]/stepFor(id)-Math.round(data[id]/stepFor(id)))>.00001)return null;
+    return{at:data.at,stairs:data.stairs,rotor:data.rotor,selected:data.selected,switchLit:hasPuzzle()&&data.switchLit,puzzleSeen:hasPuzzle()&&data.puzzleSeen,visited:new Set(data.visited)};
+  }
+  function restoreProgress(){
+    let data;
+    try{const text=window.localStorage.getItem(progressMemoryKey);if(!text||text.length>60000)return false;data=JSON.parse(text);}catch{return false;}
+    if(!data||data.version!==1||!Number.isInteger(data.level)||data.level<1||data.level>6||typeof data.letterRead!=='boolean')return false;
+    progressLocked++;
+    try{
+      letterRead=data.letterRead||data.level>1;startLevel(data.level);
+      const saved=data.checkpoint,pose=readPose(saved),goal=level===1?'letter':'exit';
+      const allowedStories=[null,'recall',endKinds[level],...(level===1?['intro']:[])];
+      const valid=pose&&typeof saved.done==='boolean'&&saved.done===(pose.at===goal)&&allowedStories.includes(saved.story)&&(!saved.done||saved.story===null||saved.story===endKinds[level]);
+      if(valid){
+        Object.assign(state,pose,{done:saved.done,doneAt:-clearProfiles[level].duration,endDismissed:saved.done,switchAt:-2000});
+        chapterComplete=state.done&&level%2===0;state.player=world(state.at).slice();
+        if(Array.isArray(saved.history)&&saved.history.length<=80){const past=saved.history.map(readPose);if(past.every(Boolean))history=past.map(s=>({...s,visited:[...s.visited]}));}
+        const restored=hasPuzzle()&&window.PalaceGo.restore(saved.puzzle);
+        if(!restored&&!state.switchLit)state.puzzleSeen=false;
+        if(saved.story)showStory(saved.story);
+        else if(hasPuzzle()&&!state.done&&state.at==='switch'&&!state.switchLit&&(saved.puzzle?.opened||!restored)&&(!extra||extra.puzzleReady(state)))inspectGo();
+      }else if(level===1)showStory('intro');
+      uiKey='';sync();
+      toast('已接回上次进度 · 第 '+String(level).padStart(2,'0')+' 关'+(saved&&!valid?'入口':''));
+      return true;
+    }finally{progressLocked--;}
+  }
   function startLevel(n){
+    progressLocked++;
     stopCompletionSound();$('level-clear').hidden=true;$('game').dataset.clearing='false';
     level=n;chapterComplete=false;extra=n>=3?window.JourneyLevels.create(n,journeyTools):null;fixed=extra?extra.fixed:n===1?entranceFixed:palaceFixed;names=extra?extra.names:Object.fromEntries(Object.entries(allNames).filter(([id])=>n===1?['start','landing','ride','letter'].includes(id):id!=='letter'));
     window.PalaceGo.configure(extra?.puzzle||'seal');
@@ -573,7 +644,7 @@
     ['one','two','three'].forEach((key,i)=>$('progress-'+key).className=chapter===i+1?'current':chapter>i+1?'complete':'');
     $('letter-book').hidden=!letterRead;$('choose-rotor').textContent=extra?extra.mechanisms.rotor:n===1?'旋转桥廊':'旋转建筑';$('choose-stairs').textContent=extra?extra.mechanisms.stairs:'翻转楼梯';$('game').dataset.level=String(n);
     for(const [id,name]of Object.entries(names))$('go-'+id).textContent=name;
-    resize();sync();
+    resize();progressLocked--;sync();
   }
   const stories={
     intro:{kicker:'归潮之城 · 第一章',title:'水宫来信',copy:'你带着一盏尚未点亮的灯，\n来到一座沉默的水宫。\n门边，似乎有人留了一封信。',foot:'先找到阶梯的落点，再随桥廊走向信亭。',next:'走近水宫'},
@@ -725,6 +796,7 @@
   }
   function sync(){
     const can=reachable(),key=[level,story,!!transition,atlasOpen,state.at,state.selected,state.switchLit,!!state.walk,moving(),state.done,history.length,window.PalaceGo.isOpen,zoomLearned,can.join()].join('|');if(key===uiKey)return;uiKey=key;
+    saveProgress();
     $('inspect-go').hidden=!hasPuzzle()||state.at!=='switch'||state.switchLit||busy();
     $('caption').textContent=caption();$('undo').disabled=!history.length||!!story||!!transition||atlasOpen||window.PalaceGo.isOpen;$('mechanism-name').textContent=extra?extra.mechanisms[state.selected]:state.selected==='stairs'?'翻转楼梯':level===1?'旋转桥廊':'旋转建筑';
     $('hint').disabled=state.done;
@@ -1038,7 +1110,7 @@
     const can=reachable(),key=[level,state.at,state.stairs,state.rotor,state.switchLit,scale,ox,oy,w,h,can.join(),['stairs','rotor'].filter(available).join()].join('|');
     if(key===markerCacheKey)return markerCache;
     const mechanisms=mechanismZones(),placed=[],ui=[
-      {x:16,y:12,width:Math.min(325,w*.42),height:Math.min(150,h*.25)},
+      {x:16,y:12,width:Math.min(325,w*.42),height:Math.min(172,h*.3)},
       {x:w-320,y:12,width:304,height:65},
       {x:w-280,y:85,width:264,height:105},
       {x:0,y:h-77,width:w,height:77},
@@ -1194,8 +1266,9 @@
     if(e.key==='Tab'){const first=$('choose-level-1'),last=$('atlas-close');if(e.shiftKey&&(document.activeElement===first||document.activeElement===$('atlas-title'))){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
   });
   const journeyTools={ctx,p,block,square,terrace,arch,dome,line,ellipse,worldLine,halo,palette,clamp,lerp,mechanismHint};
-  addEventListener('resize',resize);resize();resetChapter();previous=performance.now();
-  document.addEventListener('visibilitychange',()=>{previous=performance.now();if(document.hidden){cancelInputs();stopCompletionSound();}});
+  addEventListener('resize',resize);resize();if(!restoreProgress())resetChapter();progressReady=true;window.PalaceGo.onChange(saveProgress);saveProgress();previous=performance.now();
+  document.addEventListener('visibilitychange',()=>{previous=performance.now();if(document.hidden){cancelInputs();stopCompletionSound();saveProgress();}});
+  window.addEventListener('pagehide',saveProgress);
   function frame(t){const elapsed=Math.max(0,t-previous);previous=t;if(!document.hidden&&!atlasOpen){now+=elapsed;update(Math.min(60,elapsed));render();}requestAnimationFrame(frame);}requestAnimationFrame(frame);
   window.waterPalace={get state(){return{level,story,atlasOpen,transition:!!transition,letterRead,chapterComplete,at:state.at,stairs:state.stairs,rotor:state.rotor,switchLit:state.switchLit,walking:!!state.walk,moving:moving(),player:state.player.slice(),normal:state.normal.slice(),done:state.done,reachable:reachable(),history:history.length,camera:{zoom:view.zoom,x:view.x,y:view.y,scale}};},project:p,seam:()=>({moving:rot(crest,0),fixed:seam.slice()}),targets:()=>({nodes:Object.fromEntries(Object.keys(names).map(id=>[id,screen(world(id))])),handles:Object.fromEntries(['stairs','rotor'].filter(available).map(id=>[id,screen(handle(id))]))}),markers:()=>waypointLayout().map(m=>({...m,point:m.point.slice(),anchor:m.anchor.slice(),box:{...m.box}}))};
 })();
