@@ -146,6 +146,17 @@
 .camera-controls #zoom-reset{font-size:17px;padding:0 15px;letter-spacing:1px}
 .camera-controls button:hover{background:#f3efd329}.camera-controls button:disabled{opacity:.35;cursor:default}
 .camera-controls p{font-size:14px;margin:9px 3px 0;line-height:1.5;letter-spacing:.3px;color:#e8efd7}
+.camera-tip{position:absolute;right:0;top:68px;width:274px;padding:17px 18px;text-align:left;border:1px solid #fff0bcaa;border-radius:20px;background:#f8efd9f2;box-shadow:0 8px 30px #15595625;color:#456c62;pointer-events:none}
+.camera-tip:before{content:'';position:absolute;right:72px;top:-7px;width:12px;height:12px;background:#f8efd9;transform:rotate(45deg);border-top:1px solid #fff0bcaa;border-left:1px solid #fff0bcaa}
+.camera-tip strong{display:block;font-size:18px;line-height:1.5;font-weight:500;letter-spacing:.5px}
+.camera-controls .camera-tip p{max-width:none;margin:9px 0;font-size:16px;line-height:1.8;color:#456c62}
+.camera-tip small{display:block;font-size:13px;line-height:1.7;color:#6c8272}
+.zoom-gesture{display:flex;align-items:center;justify-content:center;gap:6px;height:28px;margin-bottom:8px;color:#62897b}
+.zoom-gesture i{display:block;width:13px;height:13px;border:2px solid #7b9d87;border-radius:50%;animation:zoom-spread 2.4s ease-in-out infinite}
+.zoom-gesture i:first-child{--spread:-11px}.zoom-gesture i:last-child{--spread:11px}.zoom-gesture b{font:24px/1 sans-serif;font-weight:400}
+@keyframes zoom-spread{0%,20%,100%{transform:translateX(0)}55%,75%{transform:translateX(var(--spread))}}
+@media(prefers-reduced-motion:reduce){.zoom-gesture i{animation:none}}
+@media(max-width:700px),(max-height:550px){.camera-tip{width:240px;padding:12px 14px}.camera-tip strong{font-size:16px}.camera-controls .camera-tip p{font-size:14px;margin:6px 0}.camera-tip small{font-size:12px}.zoom-gesture{height:20px;margin-bottom:5px}}
 .route-status{position:absolute;z-index:3;left:36px;bottom:100px;max-width:calc(100% - 72px);padding:10px 17px;border:1px solid #f4e9c377;border-radius:24px;background:#296e6980;color:#f7efce;font-size:17px;line-height:1.5;letter-spacing:.5px;pointer-events:none;backdrop-filter:blur(5px)}
 .route-status:before{content:'◇';display:inline-block;margin-right:9px;color:#efc39d}
 .route-status[data-connected="true"]{background:#f8f0d8e6;color:#4d7763;border-color:#fff4c8;box-shadow:0 3px 22px #235f5f22}
@@ -166,7 +177,12 @@
   <canvas id="scene" aria-label="归潮之城的水上建筑。点击道路行走，拖动粉色机关转动阶梯与桥廊。"></canvas>
   <div id="camera-controls" class="camera-controls" role="group" aria-label="查看建筑细节">
     <div><button id="zoom-out" aria-label="缩小画面">−</button><button id="zoom-in" aria-label="放大画面">＋</button><button id="zoom-reset" aria-label="回到全景">全景</button></div>
-    <p id="camera-tip">双指缩放 · 放大后拖动空白处</p>
+    <aside id="camera-tip" class="camera-tip" role="status" hidden>
+      <span class="zoom-gesture" aria-hidden="true"><i></i><b>↔</b><i></i></span>
+      <strong>桥有些细，放大看看</strong>
+      <p>双指张开放大，合拢缩小<br>也可以点上方 ＋ / −</p>
+      <small>放大后拖动空白处，点「全景」还原</small>
+    </aside>
   </div>
   <div id="route-status" class="route-status" role="status" aria-live="polite"></div>
   <section id="level-clear" class="level-clear" role="status" aria-live="polite" aria-atomic="true" hidden>
@@ -501,6 +517,15 @@
   let state,history=[],now=0,previous=0,w=0,h=0,scale=1,ox=0,oy=0,drag=null,toastUntil=0,uiKey='',audio=null,soundOn=false,lastFootstep=0;
   let fit={scale:1,ox:0,oy:0},view={zoom:1,x:0,y:0},pendingTap=null,pinch=null,tapFeedback=null,roadGlowUntil=0,connectionKey='';
   const pointers=new Map();
+  const zoomMemoryKey='guichao.zoom-learned.v1';
+  let zoomLearned=false;
+  try{zoomLearned=window.localStorage.getItem(zoomMemoryKey)==='1';}catch{}
+  function recordZoomUse(){
+    // Ignore resting fingers, tiny pinch jitter and full-view resets.
+    if(zoomLearned||view.zoom<1.08)return;
+    zoomLearned=true;$('camera-tip').hidden=true;uiKey='';
+    try{window.localStorage.setItem(zoomMemoryKey,'1');}catch{}
+  }
   let markerCacheKey='',markerCache=[];
   const rot=(q,a=state.rotor)=>[q[0]*Math.cos(a)-q[1]*Math.sin(a),q[0]*Math.sin(a)+q[1]*Math.cos(a),q[2]];
   const entranceRot=(q,a=state.rotor)=>{const r=rot(q,a);return[r[0]-2.1,r[1]+.8,r[2]];};
@@ -527,13 +552,13 @@
     view.x=clamp(view.x,-w*slack*.75,w*slack*.75);view.y=clamp(view.y,-h*slack*.75,h*slack*.75);
     scale=fit.scale*view.zoom;ox=w/2+(fit.ox-w/2)*view.zoom+view.x;oy=h/2+(fit.oy-h/2)*view.zoom+view.y;
     $('zoom-out').disabled=view.zoom<=1.001;$('zoom-in').disabled=view.zoom>=2.599;
-    $('zoom-reset').disabled=view.zoom<=1.001;$('camera-tip').textContent=view.zoom>1.01?'拖动空白处查看 · 点全景还原':'双指缩放 · 放大后拖动空白处';
+    $('zoom-reset').disabled=view.zoom<=1.001;
     canvas.dataset.zoom=String(Math.round(view.zoom*100));
   }
   function zoomAt(zoom,anchor=[w/2,h/2]){
     const q=local({clientX:anchor[0],clientY:anchor[1]});view.zoom=clamp(zoom,1,2.6);
     if(view.zoom===1){view.x=0;view.y=0;}else{applyCamera();view.x+=anchor[0]-(q[0]*scale+ox);view.y+=anchor[1]-(q[1]*scale+oy);}
-    applyCamera();
+    applyCamera();recordZoomUse();
   }
   function startLevel(n){
     stopCompletionSound();$('level-clear').hidden=true;$('game').dataset.clearing='false';
@@ -696,7 +721,7 @@
     return state.at==='start'?'门后的阶梯已经展开。沿阶梯走入水宫。':'点击道路行走，拖动粉色机关。';
   }
   function sync(){
-    const can=reachable(),key=[level,story,!!transition,atlasOpen,state.at,state.selected,state.switchLit,!!state.walk,moving(),state.done,history.length,window.PalaceGo.isOpen,can.join()].join('|');if(key===uiKey)return;uiKey=key;
+    const can=reachable(),key=[level,story,!!transition,atlasOpen,state.at,state.selected,state.switchLit,!!state.walk,moving(),state.done,history.length,window.PalaceGo.isOpen,zoomLearned,can.join()].join('|');if(key===uiKey)return;uiKey=key;
     $('inspect-go').hidden=!hasPuzzle()||state.at!=='switch'||state.switchLit||busy();
     $('caption').textContent=caption();$('undo').disabled=!history.length||!!story||!!transition||atlasOpen||window.PalaceGo.isOpen;$('mechanism-name').textContent=extra?extra.mechanisms[state.selected]:state.selected==='stairs'?'翻转楼梯':level===1?'旋转桥廊':'旋转建筑';
     $('hint').disabled=state.done;
@@ -707,6 +732,7 @@
     for(const id of Object.keys(allNames)){$('go-'+id).hidden=!can.includes(id)||busy();}
     const covered=!!story||!!transition||atlasOpen||window.PalaceGo.isOpen||state.done;
     $('camera-controls').hidden=covered;$('route-status').hidden=covered;
+    $('camera-tip').hidden=covered||level!==2||zoomLearned;
     $('route-status').dataset.connected=String(can.length>0&&!moving());
     $('route-status').textContent=state.walk?'正在走向'+names[state.walk.to]+'…':moving()?'机关转动中 · 松手后查看通路':can.length?'路已相连 · 点光圈或道路前进':'道路尚未相连 · 试着转动粉色机关';
     const nextConnections=can.join('|');
@@ -1093,7 +1119,7 @@
     if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(pinch&&pointers.size>=2){
       const a=[...pointers.values()],center=[(a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2];view.zoom=clamp(pinch.zoom*Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)/pinch.distance,1,2.6);applyCamera();
-      view.x+=center[0]-(pinch.point[0]*scale+ox);view.y+=center[1]-(pinch.point[1]*scale+oy);applyCamera();return;
+      view.x+=center[0]-(pinch.point[0]*scale+ox);view.y+=center[1]-(pinch.point[1]*scale+oy);applyCamera();recordZoomUse();return;
     }
     if(drag&&drag.pointerId===e.pointerId){
       const delta=(e.clientX-drag.x)-(e.clientY-drag.y)*.5;
