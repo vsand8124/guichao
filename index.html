@@ -199,7 +199,7 @@
       <div class="go-heading"><h2 id="go-title" tabindex="-1"><button id="go-title-trigger" type="button">侧庭 · 联络之印</button></h2><p>昔日的造宫人，以黑白石记录道路的秘密。</p></div>
       <div class="go-layout">
         <div class="board-frame"><div class="board-letters" aria-hidden="true"><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span></div><div class="board-numbers" aria-hidden="true"><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span></div><div id="go-board" class="go-board" role="group" aria-label="五路围棋机关谱，点击交叉点执黑落子"></div><div class="board-seal" aria-hidden="true">◇</div></div>
-        <div class="go-story"><span class="go-tag">连接手筋 · 黑先</span><h3 id="go-goal">让两枚金印重新呼应。</h3><p id="go-description">连接金环标记的两组黑棋，且不能被白棋立即提走。白棋会自动回应。</p><div id="go-count" class="go-count"></div><p id="go-message" class="go-message" role="status" aria-live="polite"></p><div id="go-result" class="go-result" hidden>◇ 墙面通路已唤醒</div><p id="go-moves" class="go-moves"></p></div>
+        <div class="go-story"><span id="go-tag" class="go-tag">初次唤印 · 黑先一手</span><h3 id="go-goal">让两枚金印重新呼应。</h3><p id="go-description">连接金环标记的两组黑棋，且不能被白棋立即提走。白棋会自动回应。</p><div id="go-count" class="go-count"></div><p id="go-message" class="go-message" role="status" aria-live="polite"></p><div id="go-result" class="go-result" hidden>◇ 墙面通路已唤醒</div><p id="go-moves" class="go-moves"></p></div>
       </div>
       <div class="go-actions"><div><button id="go-undo">退一回合</button><button id="go-reset">重新推演</button><button id="go-hint">一点启发</button></div><button id="go-return" class="go-return">暂离机关</button></div>
     </div>
@@ -233,7 +233,7 @@
   function solver(targets){
     const cache=new Map();let nodes=0;
     function win(b,color,depth,ko=null){
-      nodes++;if(targets.some(t=>b[t]!==1))return false;if(safe(b,targets,ko))return true;if(!depth)return false;
+      nodes++;if(targets.some(t=>b[t]!==1))return false;if(safe(b,targets,ko))return true;if(depth<=0)return false;
       const k=key(b)+':'+color+':'+depth+':'+ko;if(cache.has(k))return cache.get(k);
       let result=color===2,legal=0;
       for(let i=0;i<b.length;i++){const p=play(b,i,color,ko);if(!p)continue;legal++;const ok=win(p.board,3-color,depth-1,p.ko);if(color===1&&ok){result=true;break;}if(color===2&&!ok){result=false;break;}}
@@ -250,9 +250,9 @@
 </script><script>
 (() => {
  const problems={
-  seal:{id:'seal',title:'侧庭 · 联络之印',goal:'让两枚金印重新呼应。',description:'连接金环标记的两组黑棋，且不能被白棋立即提走。白棋会自动回应。',opener:'先观察两组黑棋之间的断点，再落子。',board:[2,0,2,2,0,2,1,2,0,1,0,1,0,1,2,2,0,0,0,0,2,2,0,1,2],targets:[9,11],hints:['先别急着在右边吃子。左边这组棋，能否先与中间的一子呼应？','先补中间的断点。右边两枚白子共用一个要紧的气。']},
-  bond:{id:'bond',title:'中央亭 · 稳桥之印',goal:'桥要相接，也要站稳。',description:'执黑连接两枚金印，抵住白棋的断开。白棋会自动回应。',opener:'白棋的气并不宽裕。留意能同时照应断点的一手。',board:[2,0,0,1,0,2,1,1,1,2,0,2,1,2,2,0,0,2,0,2,2,1,1,1,0],targets:[21,8],hints:['看看中间白子的气，有没有能先制造威胁的一手？','先照应下方金印，再利用白棋气紧，清出连接上方的落点。']},
-  edge:{id:'edge',title:'潮门 · 渡过之印',goal:'沿着边缘，把两岸相连。',description:'中央受阻，请执黑连通两枚金印。白棋会自动阻挡。',opener:'中央的白棋隔开两端，边缘却还留有余地。',board:[2,0,0,1,1,1,1,0,0,2,2,0,2,1,2,1,1,1,2,0,0,2,2,2,2],targets:[3,17],hints:['向最上边的一线看一看，先让上方的金印找到出路。','从上边沿伸出一手，再读清白棋在中间阻断后的气。']}
+  seal:{id:'seal',title:'侧庭 · 联络之印',tag:'初次唤印 · 黑先一手',blackMoves:1,goal:'落下一子，让两枚金印相连。',description:'两枚金印之间只差一步。执黑一手连起两组棋，就能唤醒墙面通路。',opener:'不用下满棋盘。找找两枚金印之间，能同时牵住它们的空点。',board:[0,0,0,0,0,0,2,0,2,0,0,1,0,1,0,0,2,0,2,0,0,0,0,0,0],targets:[11,13],hints:['看两枚金印之间，哪里只隔着一个空点？','下一子，同时紧挨左右两枚金印。']},
+  bond:{id:'bond',title:'中央亭 · 稳桥之印',tag:'提子再连 · 黑先两手内',blackMoves:2,goal:'先清开落点，再把金印相连。',description:'两枚金印之间被白石挡住了。黑棋两手内完成联络，白石会自动回应。',opener:'先数一数中间白石的气。让开落点，桥才能站稳。',board:[0,0,0,0,0,0,0,0,0,0,0,1,2,1,0,0,0,1,0,0,0,0,0,0,0],targets:[11,13],hints:['中间那枚白石，只剩几口气？','先在白石上方提走它，再回到空出的中心把两枚金印连起来。']},
+  edge:{id:'edge',title:'潮门 · 渡过之印',tag:'沿边联络 · 黑先三手内',blackMoves:3,goal:'沿着边缘，把两岸相连。',description:'中央受阻。黑棋三手内连通两枚金印，白石会自动阻挡；连通且不被立即提走即完成。',opener:'中央的白棋隔开两端，边缘却还留有余地。',board:[2,0,0,1,1,1,1,0,0,2,2,0,2,1,2,1,1,1,2,0,0,2,2,2,2],targets:[3,17],hints:['向最上边的一线看一看，先让上方的金印找到出路。','从上边沿伸出一手，再读清白棋在中间阻断后的气。']}
  };
  if(typeof module!=='undefined')module.exports=problems;else window.GoProblems=problems;
 })();
@@ -261,20 +261,20 @@
 (() => {
   'use strict';
   const E=window.GoTactics,$=id=>document.getElementById(id);
-  // Original local position. Targets are E4 and B3; the direct edge rescue
-  // allows a central cut. C3 prepares the connection before the edge capture.
+  // Each chapter has a bounded connection task, rather than a full game.
   let problem=window.GoProblems.seal,initial=problem.board,targets=problem.targets;
   const names=i=>'ABCDE'[i%5]+(5-Math.floor(i/5));
   const panel=$('go-panel'),grid=$('go-board'),cells=[];
   let board,ko,records,trail,level,opened=false,solved=false,skipped=false,failed=false,committed=false,pending=0,generation=0,onComplete=()=>{},returnFocus=null,accessOpen=false,taps=0,tapStarted=0;
   let search=E.solver(targets);
+  const remainingMoves=()=>Math.max(0,problem.blackMoves-records.filter(r=>r.color===1).length);
   for(let i=0;i<25;i++){
     const cell=document.createElement('button');cell.className='intersection';cell.type='button';cell.dataset.point=names(i);
     cell.onclick=()=>place(i);grid.appendChild(cell);cells.push(cell);
   }
   function message(text){$('go-message').textContent=text;}
   function render(){
-    const hints=level>=3&&!solved&&!failed?search.choices(board,1,7,ko).filter(p=>p.win).map(p=>p.i):[];
+    const hints=level>=3&&!solved&&!failed?search.choices(board,1,remainingMoves()*2-1,ko).filter(p=>p.win).map(p=>p.i):[];
     cells.forEach((cell,i)=>{
       const stone=board[i],played=records.findLast(r=>r.i===i&&r.color===stone);
       cell.className='intersection'+(stone===1?' black':stone===2?' white':'')+(targets.includes(i)&&stone===1?' target':'')+(hints.includes(i)&&!stone?' suggestion':'');
@@ -282,13 +282,13 @@
       cell.setAttribute('aria-label',names(i)+(stone===1?' 黑棋':stone===2?' 白棋':' 空点')+(targets.includes(i)?' 联络目标':''));
       cell.disabled=!!stone||solved||failed||!!pending;
     });
-    $('go-count').textContent=skipped?'试玩 · 已跳过棋谱':solved?'联络已成':failed?'可退一步再试':pending?'白石正在回应…':'执黑 · 请落子';
+    $('go-count').textContent=skipped?'试玩 · 已跳过棋谱':solved?'机关已解开':failed?'联络未成 · 可退一回合':pending?'白石正在回应…':'执黑 · 还可落 '+remainingMoves()+' 手';
     $('go-undo').disabled=!trail.length||!!pending||solved;
     $('go-reset').disabled=solved;
     $('go-hint').disabled=solved||failed||!!pending;
-    $('go-return').textContent=solved?(problem.id==='bond'?'返回中央亭 ↗':problem.id==='edge'?'返回潮门 ↗':'返回水宫 ↗'):'暂离机关';
+    $('go-return').textContent=solved?(problem.id==='bond'?'唤醒稳桥支柱 ↗':problem.id==='edge'?'开启潮门通路 ↗':'唤醒墙面通路 ↗'):'暂离机关';
     $('go-result').hidden=!solved;
-    $('go-result').textContent=problem.id==='bond'?'◇ 桥下支柱已唤醒':problem.id==='edge'?'◇ 潮门通路已唤醒':'◇ 墙面通路已唤醒';
+    $('go-result').textContent='◇ 两枚金印已相连';
     const moves=records.map((r,n)=>(n+1)+(r.color===1?'黑':'白')+names(r.i)+(r.captured.length?' 提'+r.captured.length+'子':''));
     $('go-moves').textContent=moves.length?(moves.length>4?'最近：':'')+moves.slice(-4).join(' · '):'';
     $('go-moves').title=moves.join(' · ');
@@ -299,20 +299,23 @@
   function apply(p,i,color){board=p.board;ko=p.ko;records.push({i,color,captured:p.captured});}
   function finish(){
     if(!E.safe(board,targets,ko))return false;
-    solved=true;message(problem.id==='bond'?'联络已成。桥下的支柱开始生长，两岸终于稳稳相接。':problem.id==='edge'?'联络已成。潮门缓缓升起，石阶沿墙根向彼岸生长。':'联络已成。水声沿着石缝流向墙面，沉睡的道路醒来了。');render();return true;
+    solved=true;message(problem.id==='bond'?'联络已成。唤醒桥下支柱，让两岸稳稳相接。':problem.id==='edge'?'联络已成。开启潮门，让石阶沿墙根向彼岸生长。':'就是这一手！两枚金印连起来了。点「唤醒墙面通路」，继续探索水宫。');render();return true;
   }
   function reply(){
     pending=0;
-    if(targets.some(i=>board[i]!==1)){failed=true;message('金印所在的黑棋被提走了。退一步，看看能否先照应中间的断点。');render();return;}
-    const choices=search.choices(board,2,8,ko);
+    if(targets.some(i=>board[i]!==1)){failed=true;message('金印所在的黑棋被提走了。退一回合，看看两组棋的气与断点。');render();return;}
+    const remaining=remainingMoves(),depth=Math.max(1,remaining*2);
+    const threats=new Set(search.choices(board,1,1,ko).filter(c=>c.win).map(c=>c.i));
+    const choices=search.choices(board,2,depth,ko);
     for(const c of choices){
-      c.delay=8;for(let d=0;d<=7;d++)if(search.win(c.board,1,d,c.ko)){c.delay=d;break;}
-      c.pressure=targets.reduce((n,t)=>n+(c.board[t]!==1?100: E.group(c.board,t).liberties.size===1?8:0),0)+c.captured.length*2;
+      c.delay=depth;if(c.win)for(let d=0;d<depth;d++)if(search.win(c.board,1,d,c.ko)){c.delay=d;break;}
+      c.pressure=targets.reduce((n,t)=>n+(c.board[t]!==1?100:(E.group(c.board,t).liberties.size===1?8:0)+Math.max(0,E.group(board,t).liberties.size-E.group(c.board,t).liberties.size)),0)+c.captured.length*2+(threats.has(c.i)?30:0);
     }
     choices.sort((a,b)=>Number(a.win)-Number(b.win)||b.delay-a.delay||b.pressure-a.pressure||a.i-b.i);
     const c=choices[0];if(c)apply(c,c.i,2);
     if(targets.some(i=>board[i]!==1)){failed=true;message('白石从断点反击，提走了金印所在的黑棋。可以退一步重新推演。');}
     else if(finish())return;
+    else if(!remaining||!search.win(board,1,remaining*2-1,ko)){failed=true;message(problem.id==='seal'?'白石占住了连接点。退一回合，再找能同时牵住两枚金印的那一手。':'白石挡住了这条联络。退一回合，试试换一个落点或次序。');}
     else message(c?.captured.length?'白石提走了棋子。再读一读：联络的机会还在吗？':'白石作出了阻挡。再观察两组黑棋的气与断点。');
     render();
   }
@@ -343,7 +346,7 @@
   $('go-hint').onclick=()=>{
     level++;
     const first=records.length===0;
-    message(level<=2?(first?problem.hints[level-1]:level===1?'把白石的阻挡也算进去，留意两组棋的气。':'观察断点附近的白棋。清出落点，有时比直接连接更有效。'):'水纹标出了可继续联络的落点，试着把后续应对也读完。');render();
+    message(level<=2?(first?problem.hints[level-1]:problem.id==='bond'?'白石已经让开。现在把两枚金印直接连起来。':level===1?'把白石的阻挡也算进去，留意两组棋的气。':'观察断点附近的白棋。清出落点，有时比直接连接更有效。'):'水纹标出了可继续联络的落点，试着把后续应对也读完。');render();
   };
   panel.addEventListener('keydown',e=>{
     if(e.key==='Escape'){e.preventDefault();e.stopPropagation();if(accessOpen){hideAccess();$('go-title-trigger').focus();}else close();return;}
@@ -354,11 +357,11 @@
   });
   reset();
   window.PalaceGo={
-    configure(id){opened=false;panel.hidden=true;problem=window.GoProblems[id];if(!problem)throw new Error('Unknown Go problem '+id);initial=problem.board;targets=problem.targets;search=E.solver(targets);$('go-title-trigger').textContent=problem.title;$('go-goal').textContent=problem.goal;$('go-description').textContent=problem.description;reset();},
+    configure(id){opened=false;panel.hidden=true;problem=window.GoProblems[id];if(!problem)throw new Error('Unknown Go problem '+id);initial=problem.board;targets=problem.targets;search=E.solver(targets);$('go-title-trigger').textContent=problem.title;$('go-tag').textContent=problem.tag;$('go-goal').textContent=problem.goal;$('go-description').textContent=problem.description;reset();},
     open(callback){onComplete=callback;returnFocus=document.activeElement;opened=true;taps=0;panel.hidden=false;$('scene').setAttribute('aria-hidden','true');render();$('go-title').focus();},
     reset(){opened=false;panel.hidden=true;reset();},
     get isOpen(){return opened;},
-    get state(){return{problem:problem.id,ko,opened,solved,skipped,failed,pending:!!pending,board:board.slice(),moves:records.map(r=>({...r})),targets:targets.slice()};}
+    get state(){return{problem:problem.id,ko,opened,solved,skipped,failed,pending:!!pending,remainingMoves:remainingMoves(),board:board.slice(),moves:records.map(r=>({...r})),targets:targets.slice()};}
   };
 })();
 
